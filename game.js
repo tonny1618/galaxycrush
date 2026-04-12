@@ -55,12 +55,15 @@ class GameScene extends Phaser.Scene {
 
     init(data) {
         currentLevel = { ...data.level, currentAmount: 0 };
-        this.grid = []; this.history = []; this.canMove = true;
-        this.ROWS = 8; this.COLS = 6; 
+        this.grid = []; 
+        this.history = []; 
+        this.canMove = true;
+        this.ROWS = 8; 
+        this.COLS = 6; 
         
-        // --- ON AUGMENTE ICI ---
-        this.TILE_SIZE = 60;  // Au lieu de 50
-        this.OFFSET_X = 20;   // Au lieu de 75 (pour centrer 6x60px = 360px dans 400px)
+        // --- CONFIGURATION TAILLE SMARTPHONE ---
+        this.TILE_SIZE = 60;  
+        this.OFFSET_X = 20;   // Centrage (400px total - 360px de grille = 40px / 2)
         this.OFFSET_Y = 140; 
     }
 
@@ -109,26 +112,17 @@ class GameScene extends Phaser.Scene {
         this.statusText = this.add.text(200, 350, '', { fontFamily: 'Arial Black', fontSize: '40px', fill: '#f1c40f', stroke: '#000', strokeThickness: 6 }).setOrigin(0.5).setDepth(10);
     }
 
-   initGrid() {
+    initGrid() {
         for (let r = 0; r < this.ROWS; r++) {
             this.grid[r] = [];
             for (let c = 0; c < this.COLS; c++) {
-                // On calcule le centre de la case
                 let x = this.OFFSET_X + (c * this.TILE_SIZE) + (this.TILE_SIZE / 2);
                 let y = this.OFFSET_Y + (r * this.TILE_SIZE) + (this.TILE_SIZE / 2);
                 
-                // Fond de case plus grand (56px au lieu de 46px)
-                this.add.graphics()
-                    .fillStyle(0x000000, 0.5)
-                    .fillRoundedRect(x - 28, y - 28, 56, 56, 10)
-                    .setDepth(-2);
-
-                let type = Phaser.Math.Between(0, 4);
-                // Vaisseau plus grand (50px au lieu de 40px)
-                let s = this.add.image(x, y, 'ship' + type)
-                    .setDisplaySize(50, 50) 
-                    .setInteractive().setAlpha(1).setDepth(1);
+                this.add.graphics().fillStyle(0x000000, 0.5).fillRoundedRect(x - (this.TILE_SIZE/2 - 2), y - (this.TILE_SIZE/2 - 2), this.TILE_SIZE - 4, this.TILE_SIZE - 4, 10).setDepth(-2);
                 
+                let type = Phaser.Math.Between(0, 4);
+                let s = this.add.image(x, y, 'ship' + type).setDisplaySize(this.TILE_SIZE - 10, this.TILE_SIZE - 10).setInteractive().setAlpha(1).setDepth(1);
                 s.gridRow = r; s.gridCol = c;
                 this.grid[r][c] = { type, sprite: s, typePowerUp: null };
                 s.on('pointerdown', () => { if (this.canMove) { this.selectedRow = s.gridRow; this.selectedCol = s.gridCol; }});
@@ -150,8 +144,11 @@ class GameScene extends Phaser.Scene {
         b1.sprite.gridRow = r2; b1.sprite.gridCol = c2;
         b2.sprite.gridRow = r1; b2.sprite.gridCol = c1;
 
-        this.tweens.add({ targets: b1.sprite, x: this.OFFSET_X + c2*50+25, y: this.OFFSET_Y + r2*50+25, duration: 200 });
-        this.tweens.add({ targets: b2.sprite, x: this.OFFSET_X + c1*50+25, y: this.OFFSET_Y + r1*50+25, duration: 200, onComplete: () => {
+        const getX = (col) => this.OFFSET_X + (col * this.TILE_SIZE) + (this.TILE_SIZE / 2);
+        const getY = (row) => this.OFFSET_Y + (row * this.TILE_SIZE) + (this.TILE_SIZE / 2);
+
+        this.tweens.add({ targets: b1.sprite, x: getX(c2), y: getY(r2), duration: 200 });
+        this.tweens.add({ targets: b2.sprite, x: getX(c1), y: getY(r1), duration: 200, onComplete: () => {
             let cl = this.checkMatches();
             if (b1.typePowerUp || b2.typePowerUp || cl.length > 0) {
                 if (b1.typePowerUp) this.triggerPowerUp(r2, c2);
@@ -163,8 +160,8 @@ class GameScene extends Phaser.Scene {
                 this.grid[r1][c1] = b1; this.grid[r2][c2] = b2;
                 b1.sprite.gridRow = r1; b1.sprite.gridCol = c1;
                 b2.sprite.gridRow = r2; b2.sprite.gridCol = c2;
-                this.tweens.add({ targets: b1.sprite, x: this.OFFSET_X+c1*50+25, y: this.OFFSET_Y+r1*50+25, duration: 200 });
-                this.tweens.add({ targets: b2.sprite, x: this.OFFSET_X+c2*50+25, y: this.OFFSET_Y+r2*50+25, duration: 200, onComplete: () => this.canMove = true });
+                this.tweens.add({ targets: b1.sprite, x: getX(c1), y: getY(r1), duration: 200 });
+                this.tweens.add({ targets: b2.sprite, x: getX(c2), y: getY(r2), duration: 200, onComplete: () => this.canMove = true });
             }
         }});
     }
@@ -218,7 +215,7 @@ class GameScene extends Phaser.Scene {
                     cell.typePowerUp = cl.powerUp; cell.type = -1;
                     let oldX = cell.sprite.x, oldY = cell.sprite.y; cell.sprite.destroy();
                     let key = (cl.powerUp.includes('fusée')) ? 'fusée' : cl.powerUp;
-                    cell.sprite = this.add.image(oldX, oldY, key).setDisplaySize(40, 40).setInteractive().setDepth(1);
+                    cell.sprite = this.add.image(oldX, oldY, key).setDisplaySize(this.TILE_SIZE - 10, this.TILE_SIZE - 10).setInteractive().setDepth(1);
                     if (cl.powerUp === 'fusée_h') cell.sprite.setAngle(90);
                     cell.sprite.gridRow = p.r; cell.sprite.gridCol = p.c;
                     cell.sprite.on('pointerdown', () => { if(this.canMove){this.selectedRow=cell.sprite.gridRow; this.selectedCol=cell.sprite.gridCol;}});
@@ -256,7 +253,6 @@ class GameScene extends Phaser.Scene {
     }
 
     applyGravity() {
-        // 1. Déplacer vaisseaux existants vers le bas
         for (let c = 0; c < this.COLS; c++) {
             for (let r = this.ROWS - 1; r >= 0; r--) {
                 if (this.grid[r][c] === null) {
@@ -265,21 +261,20 @@ class GameScene extends Phaser.Scene {
                             this.grid[r][c] = this.grid[k][c];
                             this.grid[k][c] = null;
                             this.grid[r][c].sprite.gridRow = r;
-                            this.tweens.add({ targets: this.grid[r][c].sprite, y: this.OFFSET_Y + (r * 50) + 25, duration: 300, ease: 'Power2' });
+                            this.tweens.add({ targets: this.grid[r][c].sprite, y: this.OFFSET_Y + (r * this.TILE_SIZE) + (this.TILE_SIZE / 2), duration: 300, ease: 'Power2' });
                             break;
                         }
                     }
                 }
             }
         }
-        // 2. Remplir cases vides du haut
         for (let c = 0; c < this.COLS; c++) {
             for (let r = 0; r < this.ROWS; r++) {
                 if (this.grid[r][c] === null) {
                     let type = Phaser.Math.Between(0, 4);
                     let x = this.OFFSET_X + (c * this.TILE_SIZE) + (this.TILE_SIZE / 2);
-                    let targetY = this.OFFSET_Y + (r * 50) + 25;
-                    let s = this.add.image(x, this.OFFSET_Y - 100, 'ship' + type).setDisplaySize(40, 40).setInteractive().setAlpha(1).setDepth(1);
+                    let targetY = this.OFFSET_Y + (r * this.TILE_SIZE) + (this.TILE_SIZE / 2);
+                    let s = this.add.image(x, this.OFFSET_Y - 100, 'ship' + type).setDisplaySize(this.TILE_SIZE - 10, this.TILE_SIZE - 10).setInteractive().setAlpha(1).setDepth(1);
                     s.gridRow = r; s.gridCol = c;
                     this.grid[r][c] = { type, sprite: s, typePowerUp: null };
                     s.on('pointerdown', () => { if (this.canMove) { this.selectedRow = s.gridRow; this.selectedCol = s.gridCol; }});
@@ -287,7 +282,6 @@ class GameScene extends Phaser.Scene {
                 }
             }
         }
-        // 3. Re-vérifier matches
         this.time.delayedCall(600, () => {
             let cl = this.checkMatches();
             if (cl.length > 0) this.destroyMatches(cl);
@@ -315,7 +309,9 @@ class GameScene extends Phaser.Scene {
                 let st = d.state[r][c];
                 if (st) {
                     let key = st.typePowerUp ? (st.typePowerUp.includes('fusée') ? 'fusée' : st.typePowerUp) : 'ship'+st.type;
-                    let s = this.add.image(this.OFFSET_X + (c * this.TILE_SIZE) + (this.TILE_SIZE / 2), this.OFFSET_Y+r*50+25, key).setDisplaySize(40, 40).setInteractive().setAlpha(1).setDepth(1);
+                    let x = this.OFFSET_X + (c * this.TILE_SIZE) + (this.TILE_SIZE / 2);
+                    let y = this.OFFSET_Y + (r * this.TILE_SIZE) + (this.TILE_SIZE / 2);
+                    let s = this.add.image(x, y, key).setDisplaySize(this.TILE_SIZE - 10, this.TILE_SIZE - 10).setInteractive().setAlpha(1).setDepth(1);
                     if (st.typePowerUp === 'fusée_h') s.setAngle(90);
                     s.gridRow = r; s.gridCol = c;
                     s.on('pointerdown', () => { if(this.canMove){this.selectedRow=s.gridRow; this.selectedCol=s.gridCol;}});
