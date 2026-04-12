@@ -9,28 +9,19 @@ const levelsData = [
     { id: 5, moves: 8,  targetColor: 4, targetAmount: 30, x: 200, y: 150 }
 ];
 
-// On récupère le niveau atteint dans la mémoire du navigateur (par défaut : 1)
 let unlockedLevel = parseInt(localStorage.getItem('galaxyCrush_reached')) || 1;
 let currentLevel = {};
 
 /**
- * PARTIE 2 : SCÈNE DE MENU (Carte du monde)
+ * PARTIE 2 : SCÈNE DE MENU
  */
 class MenuScene extends Phaser.Scene {
     constructor() { super('MenuScene'); }
-
-    preload() {
-        this.load.image('background', 'img/fond.png');
-    }
-
+    preload() { this.load.image('background', 'img/fond.png'); }
     create() {
-        // Rafraîchir la mémoire à chaque retour au menu
         unlockedLevel = parseInt(localStorage.getItem('galaxyCrush_reached')) || 1;
-
         this.add.image(200, 350, 'background').setDisplaySize(400, 700).setAlpha(0.6);
-        this.add.text(200, 60, 'GALAXY CRUSH', { 
-            fontFamily: 'Arial Black', fontSize: '32px', fill: '#fff', stroke: '#2c3e50', strokeThickness: 6 
-        }).setOrigin(0.5);
+        this.add.text(200, 60, 'GALAXY CRUSH', { fontFamily: 'Arial Black', fontSize: '32px', fill: '#fff', stroke: '#2c3e50', strokeThickness: 6 }).setOrigin(0.5);
 
         const graphics = this.add.graphics();
         graphics.lineStyle(6, 0xffffff, 0.3);
@@ -40,25 +31,16 @@ class MenuScene extends Phaser.Scene {
         graphics.strokePath();
 
         levelsData.forEach(lvl => {
-            const isLocked = lvl.id > unlockedLevel; // Est-ce que ce niveau est bloqué ?
-            const color = isLocked ? 0x7f8c8d : 0xf1c40f; // Gris si bloqué, Jaune si ouvert
-
+            const isLocked = lvl.id > unlockedLevel;
+            const color = isLocked ? 0x7f8c8d : 0xf1c40f;
             const container = this.add.container(lvl.x, lvl.y);
             const circle = this.add.circle(0, 0, 30, color).setStrokeStyle(4, 0xffffff);
-            const txt = this.add.text(0, 0, isLocked ? '🔒' : lvl.id, { 
-                fontFamily: 'Arial Black', fontSize: '20px', fill: '#2c3e50' 
-            }).setOrigin(0.5);
-            
+            const txt = this.add.text(0, 0, isLocked ? '🔒' : lvl.id, { fontFamily: 'Arial Black', fontSize: '20px', fill: '#2c3e50' }).setOrigin(0.5);
             container.add([circle, txt]);
-
-            // On ne rend interactif que si le niveau est débloqué
             if (!isLocked) {
                 circle.setInteractive();
                 circle.on('pointerdown', () => {
-                    this.tweens.add({
-                        targets: container, scale: 0.9, duration: 80, yoyo: true,
-                        onComplete: () => this.scene.start('GameScene', { level: lvl })
-                    });
+                    this.tweens.add({ targets: container, scale: 0.9, duration: 80, yoyo: true, onComplete: () => this.scene.start('GameScene', { level: lvl }) });
                 });
             }
         });
@@ -66,7 +48,8 @@ class MenuScene extends Phaser.Scene {
 }
 
 /**
- * PARTIE 3 : SCÈNE DE JEU */
+ * PARTIE 3 : SCÈNE DE JEU
+ */
 class GameScene extends Phaser.Scene {
     constructor() { super('GameScene'); }
 
@@ -89,9 +72,7 @@ class GameScene extends Phaser.Scene {
     }
 
     create() {
-        // On assombrit un peu le fond pour que les vaisseaux ressortent mieux
-        this.add.image(200, 350, 'background').setDisplaySize(400, 700).setDepth(-2).setAlpha(0.8);
-        
+        this.add.image(200, 350, 'background').setDisplaySize(400, 700).setDepth(-5).setAlpha(0.8);
         this.initGrid();
         this.createUI();
 
@@ -104,20 +85,18 @@ class GameScene extends Phaser.Scene {
     }
 
     createUI() {
-        const hudBg = this.add.graphics().fillStyle(0x000000, 0.6).fillRoundedRect(20, 20, 360, 100, 15);
+        this.add.graphics().fillStyle(0x000000, 0.6).fillRoundedRect(20, 20, 360, 100, 15);
         this.movesText = this.add.text(80, 70, `COUPS\n${currentLevel.moves}`, { fontFamily: 'Arial Black', fontSize: '20px', fill: '#fff', align: 'center' }).setOrigin(0.5);
         this.add.image(210, 70, 'ship' + currentLevel.targetColor).setDisplaySize(40, 40);
         this.targetText = this.add.text(300, 70, `OBJ.\n0/${currentLevel.targetAmount}`, { fontFamily: 'Arial Black', fontSize: '20px', fill: '#fff', align: 'center' }).setOrigin(0.5);
 
-        // Bouton Annuler
         this.undoBtn = this.add.container(200, 640);
         const bg = this.add.graphics().fillStyle(0x3498db).fillRoundedRect(-80, -25, 160, 50, 10);
         const txt = this.add.text(0, 0, '↩ ANNULER', { fontFamily: 'Arial Black', fontSize: '18px', fill: '#fff' }).setOrigin(0.5);
         this.undoBtn.add([bg, txt]).setInteractive(new Phaser.Geom.Rectangle(-80, -25, 160, 50), Phaser.Geom.Rectangle.Contains);
         this.undoBtn.on('pointerdown', () => this.undoMove());
 
-        // Bouton MENU (Caché au début)
-        this.menuBtn = this.add.container(200, 450).setVisible(false).setDepth(20);
+        this.menuBtn = this.add.container(200, 450).setVisible(false).setDepth(30);
         const mBg = this.add.graphics().fillStyle(0x2ecc71).fillRoundedRect(-100, -30, 200, 60, 15);
         const mTxt = this.add.text(0, 0, 'RETOUR CARTE', { fontFamily: 'Arial Black', fontSize: '18px', fill: '#fff' }).setOrigin(0.5);
         this.menuBtn.add([mBg, mTxt]).setInteractive(new Phaser.Geom.Rectangle(-100, -30, 200, 60), Phaser.Geom.Rectangle.Contains);
@@ -126,56 +105,20 @@ class GameScene extends Phaser.Scene {
         this.statusText = this.add.text(200, 350, '', { fontFamily: 'Arial Black', fontSize: '40px', fill: '#f1c40f', stroke: '#000', strokeThickness: 6 }).setOrigin(0.5).setDepth(10);
     }
 
-    // CORRECTION : On affiche les boutons ici
-    updateUI() {
-        this.movesText.setText(`COUPS\n${currentLevel.moves}`);
-        this.targetText.setText(`OBJ.\n${currentLevel.currentAmount}/${currentLevel.targetAmount}`);
-        
-        if (currentLevel.currentAmount >= currentLevel.targetAmount) {
-            this.statusText.setText("GAGNÉ !");
-            this.canMove = false;
-            this.undoBtn.setVisible(false);
-            this.menuBtn.setVisible(true); // <--- Affiche le bouton
-            
-            if (currentLevel.id >= unlockedLevel) {
-                unlockedLevel = currentLevel.id + 1;
-                localStorage.setItem('galaxyCrush_reached', unlockedLevel);
-            }
-        } 
-        else if (currentLevel.moves <= 0 && this.canMove) {
-            this.statusText.setText("PERDU");
-            this.canMove = false;
-            this.undoBtn.setVisible(false);
-            this.menuBtn.setVisible(true); // <--- Affiche le bouton aussi ici
-        }
-    }
-
     initGrid() {
-    for (let r = 0; r < this.ROWS; r++) {
-        this.grid[r] = [];
-        for (let c = 0; c < this.COLS; c++) {
-            let x = this.OFFSET_X + c * this.TILE_SIZE + 25, y = this.OFFSET_Y + r * this.TILE_SIZE + 25;
-            
-            // On met le fond de case en profondeur -2 (tout en bas)
-            this.add.graphics()
-                .fillStyle(0x000000, 0.5)
-                .fillRoundedRect(x - 23, y - 23, 46, 46, 8)
-                .setDepth(-2); 
-
-            let type = Phaser.Math.Between(0, 4);
-            let s = this.add.image(x, y, 'ship' + type)
-                .setDisplaySize(40, 40)
-                .setInteractive()
-                .setAlpha(1)    // Force l'opacité
-                .setDepth(1);   // Force le premier plan
-                
-            s.gridRow = r; s.gridCol = c;
-            this.grid[r][c] = { type, sprite: s, typePowerUp: null };
-            s.on('pointerdown', () => { if (this.canMove) { this.selectedRow = s.gridRow; this.selectedCol = s.gridCol; }});
+        for (let r = 0; r < this.ROWS; r++) {
+            this.grid[r] = [];
+            for (let c = 0; c < this.COLS; c++) {
+                let x = this.OFFSET_X + c * this.TILE_SIZE + 25, y = this.OFFSET_Y + r * this.TILE_SIZE + 25;
+                this.add.graphics().fillStyle(0x000000, 0.5).fillRoundedRect(x - 23, y - 23, 46, 46, 8).setDepth(-2);
+                let type = Phaser.Math.Between(0, 4);
+                let s = this.add.image(x, y, 'ship' + type).setDisplaySize(40, 40).setInteractive().setAlpha(1).setDepth(1);
+                s.gridRow = r; s.gridCol = c;
+                this.grid[r][c] = { type, sprite: s, typePowerUp: null };
+                s.on('pointerdown', () => { if (this.canMove) { this.selectedRow = s.gridRow; this.selectedCol = s.gridCol; }});
+            }
         }
     }
-}
-
 
     handleSwipe(dx, dy) {
         let tr = this.selectedRow, tc = this.selectedCol;
@@ -259,7 +202,7 @@ class GameScene extends Phaser.Scene {
                     cell.typePowerUp = cl.powerUp; cell.type = -1;
                     let oldX = cell.sprite.x, oldY = cell.sprite.y; cell.sprite.destroy();
                     let key = (cl.powerUp.includes('fusée')) ? 'fusée' : cl.powerUp;
-                    cell.sprite = this.add.image(oldX, oldY, key).setDisplaySize(40, 40).setInteractive();
+                    cell.sprite = this.add.image(oldX, oldY, key).setDisplaySize(40, 40).setInteractive().setDepth(1);
                     if (cl.powerUp === 'fusée_h') cell.sprite.setAngle(90);
                     cell.sprite.gridRow = p.r; cell.sprite.gridCol = p.c;
                     cell.sprite.on('pointerdown', () => { if(this.canMove){this.selectedRow=cell.sprite.gridRow; this.selectedCol=cell.sprite.gridCol;}});
@@ -296,97 +239,44 @@ class GameScene extends Phaser.Scene {
         }
     }
 
-    pplyGravity() {
-        // ÉTAPE 1 : Faire descendre les vaisseaux existants
+    applyGravity() {
+        // 1. Déplacer vaisseaux existants vers le bas
         for (let c = 0; c < this.COLS; c++) {
             for (let r = this.ROWS - 1; r >= 0; r--) {
                 if (this.grid[r][c] === null) {
-                    // Si la case est vide, on cherche le premier vaisseau au-dessus (k < r)
                     for (let k = r - 1; k >= 0; k--) {
                         if (this.grid[k][c] !== null) {
-                            // On déplace les données
                             this.grid[r][c] = this.grid[k][c];
                             this.grid[k][c] = null;
-                            
-                            // On met à jour les coordonnées du sprite pour le clic
                             this.grid[r][c].sprite.gridRow = r;
-                            
-                            // ANIMATION : On le fait glisser vers sa nouvelle position
-                            this.tweens.add({
-                                targets: this.grid[r][c].sprite,
-                                y: this.OFFSET_Y + (r * this.TILE_SIZE) + (this.TILE_SIZE / 2),
-                                duration: 300,
-                                ease: 'Power2'
-                            });
-                            break; // On a trouvé un vaisseau, on passe à la case suivante
+                            this.tweens.add({ targets: this.grid[r][c].sprite, y: this.OFFSET_Y + (r * 50) + 25, duration: 300, ease: 'Power2' });
+                            break;
                         }
                     }
                 }
             }
         }
-
-        // ÉTAPE 2 : Remplir les cases restées vides (en haut de la colonne)
+        // 2. Remplir cases vides du haut
         for (let c = 0; c < this.COLS; c++) {
             for (let r = 0; r < this.ROWS; r++) {
                 if (this.grid[r][c] === null) {
                     let type = Phaser.Math.Between(0, 4);
-                    let targetX = this.OFFSET_X + (c * this.TILE_SIZE) + (this.TILE_SIZE / 2);
-                    let targetY = this.OFFSET_Y + (r * this.TILE_SIZE) + (this.TILE_SIZE / 2);
-
-                    // On crée le nouveau vaisseau HORS de l'écran (au-dessus du plateau)
-                    let s = this.add.image(targetX, this.OFFSET_Y - 100, 'ship' + type)
-                        .setDisplaySize(40, 40)
-                        .setInteractive()
-                        .setAlpha(1)
-                        .setDepth(1);
-
-                    s.gridRow = r;
-                    s.gridCol = c;
-                    this.grid[r][c] = { type, sprite: s, typePowerUp: null };
-
-                    s.on('pointerdown', () => { 
-                        if (this.canMove) { this.selectedRow = s.gridRow; this.selectedCol = s.gridCol; }
-                    });
-
-                    // ANIMATION : On le fait tomber avec un petit effet de rebond
-                    this.tweens.add({
-                        targets: s,
-                        y: targetY,
-                        duration: 500,
-                        delay: r * 50, // Petit délai pour un effet "pluie"
-                        ease: 'Bounce.easeOut'
-                    });
-                }
-            }
-        }
-
-        // ÉTAPE 3 : Vérifier si la chute a créé de nouveaux alignements
-        this.time.delayedCall(600, () => {
-            let matches = this.checkMatches();
-            if (matches.length > 0) {
-                this.destroyMatches(matches);
-            } else {
-                // On ne redonne la main au joueur que si tout est fini
-                if (currentLevel.moves > 0 && currentLevel.currentAmount < currentLevel.targetAmount) {
-                    this.canMove = true;
-                }
-            }
-        });
-    }
-        for (let c = 0; c < this.COLS; c++) {
-            for (let r = 0; r < this.ROWS; r++) {
-                if (this.grid[r][c] === null) {
-                    let type = Phaser.Math.Between(0, 4);
-                    let x = this.OFFSET_X + c*50+25, y = this.OFFSET_Y + r*50+25;
-                    let s = this.add.image(x, this.OFFSET_Y - 50, 'ship' + type).setDisplaySize(40, 40).setInteractive();
+                    let x = this.OFFSET_X + (c * 50) + 25;
+                    let targetY = this.OFFSET_Y + (r * 50) + 25;
+                    let s = this.add.image(x, this.OFFSET_Y - 100, 'ship' + type).setDisplaySize(40, 40).setInteractive().setAlpha(1).setDepth(1);
                     s.gridRow = r; s.gridCol = c;
                     this.grid[r][c] = { type, sprite: s, typePowerUp: null };
-                    s.on('pointerdown', () => { if(this.canMove){this.selectedRow=s.gridRow; this.selectedCol=s.gridCol;}});
-                    this.tweens.add({ targets: s, y: y, duration: 400, ease: 'Bounce.easeOut' });
+                    s.on('pointerdown', () => { if (this.canMove) { this.selectedRow = s.gridRow; this.selectedCol = s.gridCol; }});
+                    this.tweens.add({ targets: s, y: targetY, duration: 500, delay: r * 50, ease: 'Bounce.easeOut' });
                 }
             }
         }
-        this.time.delayedCall(500, () => { if (this.checkMatches().length > 0) this.destroyMatches(this.checkMatches()); else if(currentLevel.moves > 0) this.canMove = true; });
+        // 3. Re-vérifier matches
+        this.time.delayedCall(600, () => {
+            let cl = this.checkMatches();
+            if (cl.length > 0) this.destroyMatches(cl);
+            else if (currentLevel.moves > 0 && currentLevel.currentAmount < currentLevel.targetAmount) this.canMove = true;
+        });
     }
 
     saveState() {
@@ -399,94 +289,50 @@ class GameScene extends Phaser.Scene {
     }
 
     undoMove() {
-        // 1. On vérifie si on a le droit d'annuler (pas si gagné/perdu ou historique vide)
         let isGameOver = (currentLevel.currentAmount >= currentLevel.targetAmount) || (currentLevel.moves <= 0);
         if (!this.canMove || this.history.length === 0 || isGameOver) return;
-
-        // 2. On récupère la sauvegarde et on met à jour les scores
         let d = this.history.pop();
-        currentLevel.moves = d.moves; 
-        currentLevel.currentAmount = d.amount; 
-        this.updateUI();
-
-        // 3. On détruit physiquement TOUS les vaisseaux à l'écran pour les recréer proprement
+        currentLevel.moves = d.moves; currentLevel.currentAmount = d.amount; this.updateUI();
+        for(let r=0; r<this.ROWS; r++) for(let c=0; c<this.COLS; c++) if(this.grid[r][c]?.sprite) this.grid[r][c].sprite.destroy();
         for(let r=0; r<this.ROWS; r++) {
             for(let c=0; c<this.COLS; c++) {
-                if(this.grid[r][c]?.sprite) this.grid[r][c].sprite.destroy();
-            }
-        }
-
-        // 4. On boucle sur les données de l'historique pour replacer les vaisseaux
-        for(let r=0; r<this.ROWS; r++) {
-            for(let c=0; c<this.COLS; c++) {
-                let st = d.state[r][c]; // st contient les infos de la case
-                
+                let st = d.state[r][c];
                 if (st) {
-                    // On définit si c'est un vaisseau normal ou un bonus
                     let key = st.typePowerUp ? (st.typePowerUp.includes('fusée') ? 'fusée' : st.typePowerUp) : 'ship'+st.type;
-                    
-                    // --- LE CORRECTIF EST ICI ---
-                    let s = this.add.image(this.OFFSET_X + c * 50 + 25, this.OFFSET_Y + r * 50 + 25, key)
-                        .setDisplaySize(40, 40)
-                        .setInteractive()
-                        .setAlpha(1)   // Force l'opacité au maximum
-                        .setDepth(1);  // Force le vaisseau à être AU-DESSUS du fond de case
-                    
-                    // Si c'était une fusée horizontale, on lui remet son angle
+                    let s = this.add.image(this.OFFSET_X+c*50+25, this.OFFSET_Y+r*50+25, key).setDisplaySize(40, 40).setInteractive().setAlpha(1).setDepth(1);
                     if (st.typePowerUp === 'fusée_h') s.setAngle(90);
-
-                    // On lui redonne ses coordonnées de grille et son écouteur de clic
-                    s.gridRow = r; 
-                    s.gridCol = c;
-                    s.on('pointerdown', () => { 
-                        if(this.canMove){
-                            this.selectedRow = s.gridRow; 
-                            this.selectedCol = s.gridCol;
-                        }
-                    });
-
-                    // On réenregistre le tout dans notre grille de données
+                    s.gridRow = r; s.gridCol = c;
+                    s.on('pointerdown', () => { if(this.canMove){this.selectedRow=s.gridRow; this.selectedCol=s.gridCol;}});
                     this.grid[r][c] = { type: st.type, sprite: s, typePowerUp: st.typePowerUp };
-                } else {
-                    this.grid[r][c] = null;
-                }
+                } else this.grid[r][c] = null;
             }
         }
     }
 
-updateUI() {
+    updateUI() {
         this.movesText.setText(`COUPS\n${currentLevel.moves}`);
         this.targetText.setText(`OBJ.\n${currentLevel.currentAmount}/${currentLevel.targetAmount}`);
-        
-        // --- CAS DE VICTOIRE ---
         if (currentLevel.currentAmount >= currentLevel.targetAmount) {
             this.statusText.setText("GAGNÉ !");
-            this.canMove = false; // On bloque le jeu
-            
-            this.undoBtn.setVisible(false); // On cache le bouton annuler
-            this.menuBtn.setVisible(true);  // ON AFFICHE LE BOUTON RETOUR CARTE
-            this.menuBtn.setDepth(20);      // On s'assure qu'il est au-dessus de tout
-
-            // LOGIQUE DE DÉBLOCAGE ET SAUVEGARDE
+            this.canMove = false;
+            this.undoBtn.setVisible(false);
+            this.menuBtn.setVisible(true);
             if (currentLevel.id >= unlockedLevel) {
                 unlockedLevel = currentLevel.id + 1;
                 localStorage.setItem('galaxyCrush_reached', unlockedLevel);
             }
         } 
-        // --- CAS DE DÉFAITE ---
         else if (currentLevel.moves <= 0 && this.canMove) {
             this.statusText.setText("PERDU");
             this.canMove = false;
-            
             this.undoBtn.setVisible(false);
-            this.menuBtn.setVisible(true); // On le montre aussi en cas de défaite
-            this.menuBtn.setDepth(20);
+            this.menuBtn.setVisible(true);
         }
     }
 }
 
 /**
- * PARTIE 4 : LANCEMENT DU JEU
+ * PARTIE 4 : CONFIG
  */
 const config = {
     type: Phaser.AUTO,
