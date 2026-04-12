@@ -296,28 +296,83 @@ class GameScene extends Phaser.Scene {
         }
     }
 
-    applyGravity() {
-       // Trouve cette partie dans ta fonction applyGravity
-for (let c = 0; c < this.COLS; c++) {
-    for (let r = 0; r < this.ROWS; r++) {
-        if (this.grid[r][c] === null) {
-            let type = Phaser.Math.Between(0, 4);
-            let x = this.OFFSET_X + c * 50 + 25, y = this.OFFSET_Y + r * 50 + 25;
-            
-            let s = this.add.image(x, this.OFFSET_Y - 50, 'ship' + type)
-                .setDisplaySize(40, 40)
-                .setInteractive()
-                .setAlpha(1)   // AJOUT : Bien visible
-                .setDepth(1);  // AJOUT : Par-dessus le fond
-            
-            s.gridRow = r; s.gridCol = c;
-            this.grid[r][c] = { type, sprite: s, typePowerUp: null };
-            
-            s.on('pointerdown', () => { if(this.canMove){this.selectedRow=s.gridRow; this.selectedCol=s.gridCol;}});
-            this.tweens.add({ targets: s, y: y, duration: 400, ease: 'Bounce.easeOut' });
+    pplyGravity() {
+        // ÉTAPE 1 : Faire descendre les vaisseaux existants
+        for (let c = 0; c < this.COLS; c++) {
+            for (let r = this.ROWS - 1; r >= 0; r--) {
+                if (this.grid[r][c] === null) {
+                    // Si la case est vide, on cherche le premier vaisseau au-dessus (k < r)
+                    for (let k = r - 1; k >= 0; k--) {
+                        if (this.grid[k][c] !== null) {
+                            // On déplace les données
+                            this.grid[r][c] = this.grid[k][c];
+                            this.grid[k][c] = null;
+                            
+                            // On met à jour les coordonnées du sprite pour le clic
+                            this.grid[r][c].sprite.gridRow = r;
+                            
+                            // ANIMATION : On le fait glisser vers sa nouvelle position
+                            this.tweens.add({
+                                targets: this.grid[r][c].sprite,
+                                y: this.OFFSET_Y + (r * this.TILE_SIZE) + (this.TILE_SIZE / 2),
+                                duration: 300,
+                                ease: 'Power2'
+                            });
+                            break; // On a trouvé un vaisseau, on passe à la case suivante
+                        }
+                    }
+                }
+            }
         }
+
+        // ÉTAPE 2 : Remplir les cases restées vides (en haut de la colonne)
+        for (let c = 0; c < this.COLS; c++) {
+            for (let r = 0; r < this.ROWS; r++) {
+                if (this.grid[r][c] === null) {
+                    let type = Phaser.Math.Between(0, 4);
+                    let targetX = this.OFFSET_X + (c * this.TILE_SIZE) + (this.TILE_SIZE / 2);
+                    let targetY = this.OFFSET_Y + (r * this.TILE_SIZE) + (this.TILE_SIZE / 2);
+
+                    // On crée le nouveau vaisseau HORS de l'écran (au-dessus du plateau)
+                    let s = this.add.image(targetX, this.OFFSET_Y - 100, 'ship' + type)
+                        .setDisplaySize(40, 40)
+                        .setInteractive()
+                        .setAlpha(1)
+                        .setDepth(1);
+
+                    s.gridRow = r;
+                    s.gridCol = c;
+                    this.grid[r][c] = { type, sprite: s, typePowerUp: null };
+
+                    s.on('pointerdown', () => { 
+                        if (this.canMove) { this.selectedRow = s.gridRow; this.selectedCol = s.gridCol; }
+                    });
+
+                    // ANIMATION : On le fait tomber avec un petit effet de rebond
+                    this.tweens.add({
+                        targets: s,
+                        y: targetY,
+                        duration: 500,
+                        delay: r * 50, // Petit délai pour un effet "pluie"
+                        ease: 'Bounce.easeOut'
+                    });
+                }
+            }
+        }
+
+        // ÉTAPE 3 : Vérifier si la chute a créé de nouveaux alignements
+        this.time.delayedCall(600, () => {
+            let matches = this.checkMatches();
+            if (matches.length > 0) {
+                this.destroyMatches(matches);
+            } else {
+                // On ne redonne la main au joueur que si tout est fini
+                if (currentLevel.moves > 0 && currentLevel.currentAmount < currentLevel.targetAmount) {
+                    this.canMove = true;
+                }
+            }
+        });
     }
-}
         for (let c = 0; c < this.COLS; c++) {
             for (let r = 0; r < this.ROWS; r++) {
                 if (this.grid[r][c] === null) {
