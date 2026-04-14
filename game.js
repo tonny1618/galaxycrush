@@ -374,9 +374,22 @@ class GameScene extends Phaser.Scene {
 /**
  * CONFIGURATION
  */
+/**
+ * CONFIGURATION
+ */
 const config = {
-    type: Phaser.AUTO, width: 1080, height: 1920, backgroundColor: '#000',
-    scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
+    type: Phaser.AUTO,
+    width: 1080,
+    height: 1920,
+    backgroundColor: '#000',
+    scale: {
+        mode: Phaser.Scale.FIT, 
+        autoCenter: Phaser.Scale.CENTER_BOTH,
+        parent: 'game-container',
+        expandParent: false
+    },
     scene: [MenuScene, GameScene]
 };
+
+// C'EST CETTE LIGNE QUI MANQUAIT :
 const game = new Phaser.Game(config);
