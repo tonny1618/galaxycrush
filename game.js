@@ -6,42 +6,64 @@ let unlockedLevel = parseInt(localStorage.getItem(SAVE_KEY)) || 1;
 let currentLevel = {};
 
 /**
- * PARTIE 2 : SCÈNE DE MENU
+ * PARTIE 2 : SCÈNE DE MENU (ADAPTATIVE)
  */
 class MenuScene extends Phaser.Scene {
     constructor() { super('MenuScene'); this.currentSector = 0; }
     preload() { this.load.image('background', 'img/fond.png'); }
+    
     create() {
+        const { width, height } = this.cameras.main;
+        const centerX = width / 2;
         this.cameras.main.fadeIn(500);
+        
         unlockedLevel = parseInt(localStorage.getItem(SAVE_KEY)) || 1;
         this.currentSector = Math.floor((unlockedLevel - 1) / 20);
-        this.drawMap();
+
+        // Fond plein écran parfait
+        let bg = this.add.image(centerX, height / 2, 'background');
+        let scale = Math.max(width / bg.width, height / bg.height);
+        bg.setScale(scale).setAlpha(0.6);
+
+        // Titres 
+        this.add.text(centerX, 180, 'GALAXY CRUSH', { fontFamily: 'Arial Black', fontSize: '85px', fill: '#fff' }).setOrigin(0.5);
+        this.add.text(centerX, 280, `SECTEUR ${this.currentSector + 1}`, { fontFamily: 'Arial Black', fontSize: '50px', fill: '#f1c40f' }).setOrigin(0.5);
+
+        this.drawMap(centerX, height);
     }
-    drawMap() {
-        this.children.removeAll();
-        this.add.image(540, 960, 'background').setDisplaySize(1080, 1920).setAlpha(0.6);
-        this.add.text(540, 120, 'GALAXY CRUSH', { fontFamily: 'Arial Black', fontSize: '90px', fill: '#fff' }).setOrigin(0.5);
-        this.add.text(540, 220, `SECTEUR ${this.currentSector + 1}`, { fontFamily: 'Arial Black', fontSize: '50px', fill: '#f1c40f' }).setOrigin(0.5);
+
+    drawMap(centerX, height) {
+        this.children.list.filter(c => c.type === 'Container' || (c.type === 'Text' && c.y > 500)).forEach(c => c.destroy());
+        
         const sectorLevels = levelsData.filter(l => l.page === this.currentSector);
         sectorLevels.forEach(lvl => {
             const isLocked = lvl.id > unlockedLevel;
             const color = isLocked ? 0x7f8c8d : 0xf1c40f;
-            const container = this.add.container(lvl.x, lvl.y);
+            
+            // Adaptation des positions
+            let posX = (lvl.x / 1080) * this.cameras.main.width;
+            let posY = (lvl.y / 1920) * this.cameras.main.height;
+
+            const container = this.add.container(posX, posY);
             const circle = this.add.circle(0, 0, 80, color).setStrokeStyle(10, 0xffffff);
             const txt = this.add.text(0, 0, isLocked ? '🔒' : lvl.id, { fontFamily: 'Arial Black', fontSize: '50px', fill: '#2c3e50' }).setOrigin(0.5);
             container.add([circle, txt]);
+
             if (!isLocked) circle.setInteractive().on('pointerdown', () => {
                 this.cameras.main.fadeOut(500);
                 this.cameras.main.once('camerafadeoutcomplete', () => this.scene.start('GameScene', { level: lvl }));
             });
         });
-        if (this.currentSector > 0) this.add.text(200, 1750, '◀ PRÉC.', { fontFamily: 'Arial Black', fontSize: '50px', fill: '#fff' }).setOrigin(0.5).setInteractive().on('pointerdown', () => { this.currentSector--; this.drawMap(); });
-        if (this.currentSector < 4) this.add.text(880, 1750, 'SUIV. ▶', { fontFamily: 'Arial Black', fontSize: '50px', fill: '#fff' }).setOrigin(0.5).setInteractive().on('pointerdown', () => { this.currentSector++; this.drawMap(); });
+
+        // Navigation
+        let navY = height - 130;
+        if (this.currentSector > 0) this.add.text(centerX - 300, navY, '◀ PRÉC.', { fontFamily: 'Arial Black', fontSize: '50px', fill: '#fff' }).setOrigin(0.5).setInteractive().on('pointerdown', () => { this.currentSector--; this.scene.restart(); });
+        if (this.currentSector < 4) this.add.text(centerX + 300, navY, 'SUIV. ▶', { fontFamily: 'Arial Black', fontSize: '50px', fill: '#fff' }).setOrigin(0.5).setInteractive().on('pointerdown', () => { this.currentSector++; this.scene.restart(); });
     }
 }
 
 /**
- * PARTIE 3 : SCÈNE DE JEU
+ * PARTIE 3 : SCÈNE DE JEU (MÉTHODE INFAILLIBLE POUR LE SWIPE)
  */
 class GameScene extends Phaser.Scene {
     constructor() { super('GameScene'); }
@@ -50,7 +72,7 @@ class GameScene extends Phaser.Scene {
         currentLevel = { ...data.level, currentAmount: 0 };
         this.grid = []; this.history = []; this.canMove = true; this.undoLeft = 3;
         this.ROWS = 8; this.COLS = 6;
-        this.TILE_SIZE = 160; this.OFFSET_X = 60; this.OFFSET_Y = 400; 
+        this.TILE_SIZE = 160; 
     }
 
     preload() {
@@ -68,15 +90,51 @@ class GameScene extends Phaser.Scene {
     }
 
     create() {
+        const { width, height } = this.cameras.main;
+        const centerX = width / 2;
+        const centerY = height / 2;
+
         this.cameras.main.fadeIn(500);
-        this.add.image(540, 960, 'background').setDisplaySize(1080, 1920).setDepth(-10);
+
+        let bg = this.add.image(centerX, centerY, 'background');
+        let scale = Math.max(width / bg.width, height / bg.height);
+        bg.setScale(scale).setDepth(-10);
+
+        // Offsets pour centrer la grille
+        this.OFFSET_X = centerX - (this.COLS * this.TILE_SIZE) / 2;
+        this.OFFSET_Y = centerY - (this.ROWS * this.TILE_SIZE) / 2 + 80;
+
         this.initGrid();
-        this.createUI();
+        this.createUI(width, height, centerX);
+
+        // NOUVEAU SYSTÈME DE GESTION DU DOIGT (Mathématique au lieu de Hitbox)
+        this.input.on('pointerdown', (p) => {
+            if (!this.canMove) return;
+            
+            // On calcule mathématiquement quelle case a été touchée
+            let c = Math.floor((p.downX - this.OFFSET_X) / this.TILE_SIZE);
+            let r = Math.floor((p.downY - this.OFFSET_Y) / this.TILE_SIZE);
+            
+            // Si le doigt est bien tombé dans les limites de la grille
+            if (r >= 0 && r < this.ROWS && c >= 0 && c < this.COLS) {
+                this.selectedRow = r;
+                this.selectedCol = c;
+            } else {
+                this.selectedRow = undefined;
+            }
+        });
+
         this.input.on('pointerup', (p) => {
             if (!this.canMove || this.selectedRow === undefined) return;
-            let dx = p.upX - p.downX, dy = p.upY - p.downY;
-            if (Math.abs(dx) > 50 || Math.abs(dy) > 50) this.handleSwipe(dx, dy);
-            this.selectedRow = undefined;
+            
+            let dx = p.upX - p.downX;
+            let dy = p.upY - p.downY;
+            
+            // Tolérance de swipe (40 pixels minimum pour valider le mouvement)
+            if (Math.abs(dx) > 40 || Math.abs(dy) > 40) {
+                this.handleSwipe(dx, dy);
+            }
+            this.selectedRow = undefined; // On réinitialise
         });
     }
 
@@ -87,17 +145,23 @@ class GameScene extends Phaser.Scene {
                 let x = this.OFFSET_X + (c * this.TILE_SIZE) + (this.TILE_SIZE / 2);
                 let y = this.OFFSET_Y + (r * this.TILE_SIZE) + (this.TILE_SIZE / 2);
                 this.add.graphics().fillStyle(0x000000, 0.5).fillRoundedRect(x - 75, y - 75, 150, 150, 25).setDepth(-2);
+                
                 let type; let possible = [0,1,2,3,4];
                 do {
                     type = possible[Math.floor(Math.random() * possible.length)];
                     let mH = (c >= 2 && this.grid[r][c-1].type === type && this.grid[r][c-2].type === type);
                     let mV = (r >= 2 && this.grid[r-1][c].type === type && this.grid[r-2][c].type === type);
                     if (mH || mV) possible = possible.filter(t => t !== type); else break;
+                    
+                    // Ligne de sécurité 
+                    if (possible.length === 0) { type = 0; break; } 
+                    
                 } while (possible.length > 0);
-                let s = this.add.image(x, y, 'ship' + type).setDisplaySize(130, 130).setInteractive().setDepth(1);
+                
+                let s = this.add.image(x, y, 'ship' + type).setDisplaySize(130, 130).setDepth(1);
                 s.gridRow = r; s.gridCol = c;
                 this.grid[r][c] = { type, sprite: s, typePowerUp: null, shield: false, shieldSprite: null };
-                s.on('pointerdown', () => { if (this.canMove) { this.selectedRow = s.gridRow; this.selectedCol = s.gridCol; }});
+                
                 if (currentLevel.shieldChance && Math.random() < currentLevel.shieldChance) {
                     this.grid[r][c].shield = true;
                     this.grid[r][c].shieldSprite = this.add.image(x, y, 'bouclier').setDisplaySize(160, 160).setAlpha(0.8).setDepth(2);
@@ -106,32 +170,42 @@ class GameScene extends Phaser.Scene {
         }
     }
 
-    createUI() {
-        this.add.graphics().fillStyle(0x000000, 0.7).fillRoundedRect(50, 40, 980, 320, 40);
-        this.add.text(540, 100, `NIVEAU ${currentLevel.id}`, { fontFamily: 'Arial Black', fontSize: '50px', fill: '#f1c40f' }).setOrigin(0.5);
-        this.movesText = this.add.text(250, 230, `COUPS\n${currentLevel.moves}`, { fontFamily: 'Arial Black', fontSize: '60px', fill: '#fff', align: 'center' }).setOrigin(0.5);
-        this.add.image(540, 230, 'ship' + currentLevel.targetColor).setDisplaySize(120, 120);
-        this.targetText = this.add.text(830, 230, `OBJ.\n0/${currentLevel.targetAmount}`, { fontFamily: 'Arial Black', fontSize: '60px', fill: '#fff', align: 'center' }).setOrigin(0.5);
-        
-        this.undoBtn = this.add.container(540, 1750);
-        this.undoBtn.add([this.add.graphics().fillStyle(0x3498db).fillRoundedRect(-250, -60, 500, 120, 30), this.undoText = this.add.text(0, 0, `↩ ANNULER (${this.undoLeft}/3)`, { fontFamily: 'Arial Black', fontSize: '45px', fill: '#fff' }).setOrigin(0.5)]);
-        this.undoBtn.setInteractive(new Phaser.Geom.Rectangle(-250, -60, 500, 120), Phaser.Geom.Rectangle.Contains).on('pointerdown', () => this.undoMove());
-        
-        this.retryBtn = this.add.container(540, 1050).setVisible(false).setDepth(100);
-        this.retryBtn.add([this.add.graphics().fillStyle(0xe67e22).fillRoundedRect(-250, -80, 500, 160, 40), this.add.text(0, 0, 'RÉESSAYER ↻', { fontFamily: 'Arial Black', fontSize: '50px', fill: '#fff' }).setOrigin(0.5)]);
-        this.retryBtn.setInteractive(new Phaser.Geom.Rectangle(-250, -80, 500, 160), Phaser.Geom.Rectangle.Contains).on('pointerdown', () => this.scene.restart({ level: levelsData.find(l => l.id === currentLevel.id) }));
+    createUI(width, height, centerX) {
+        const topMargin = 100;
+        this.add.graphics().fillStyle(0x000000, 0.7).fillRoundedRect(width * 0.05, topMargin, width * 0.9, 250, 40).setDepth(10);
+        this.add.text(centerX, topMargin + 50, `NIVEAU ${currentLevel.id}`, { fontFamily: 'Arial Black', fontSize: '50px', fill: '#f1c40f' }).setOrigin(0.5).setDepth(11);
+        this.movesText = this.add.text(width * 0.25, topMargin + 160, `COUPS\n${currentLevel.moves}`, { fontFamily: 'Arial Black', fontSize: '60px', fill: '#fff', align: 'center' }).setOrigin(0.5).setDepth(11);
+        this.targetIcon = this.add.image(centerX, topMargin + 160, 'ship' + currentLevel.targetColor).setDisplaySize(120, 120).setDepth(11);
+        this.targetText = this.add.text(width * 0.75, topMargin + 160, `OBJ.\n0/${currentLevel.targetAmount}`, { fontFamily: 'Arial Black', fontSize: '60px', fill: '#fff', align: 'center' }).setOrigin(0.5).setDepth(11);
 
-        this.nextBtn = this.add.container(540, 1050).setVisible(false).setDepth(100);
-        this.nextBtn.add([this.add.graphics().fillStyle(0xf1c40f).fillRoundedRect(-280, -80, 560, 160, 40), this.add.text(0, 0, 'MISSION SUIVANTE ➔', { fontFamily: 'Arial Black', fontSize: '45px', fill: '#2c3e50' }).setOrigin(0.5)]);
-        this.nextBtn.setInteractive(new Phaser.Geom.Rectangle(-280, -80, 560, 160), Phaser.Geom.Rectangle.Contains).on('pointerdown', () => {
+        // Footer
+        this.undoBtn = this.add.container(centerX, height - 160).setDepth(100);
+        this.undoBtn.add([
+            this.add.graphics().fillStyle(0x3498db).fillRoundedRect(-250, -60, 500, 120, 30),
+            this.undoText = this.add.text(0, 0, `↩ ANNULER (${this.undoLeft}/3)`, { fontFamily: 'Arial Black', fontSize: '45px', fill: '#fff' }).setOrigin(0.5)
+        ]);
+        this.undoBtn.setInteractive(new Phaser.Geom.Rectangle(-250, -60, 500, 120), Phaser.Geom.Rectangle.Contains).on('pointerdown', () => this.undoMove());
+
+        this.statusText = this.add.text(centerX, height / 2, '', { fontFamily: 'Arial Black', fontSize: '100px', fill: '#f1c40f', stroke: '#000', strokeThickness: 15 }).setOrigin(0.5).setDepth(110).setVisible(false);
+        this.retryBtn = this.createEndBtn(centerX, height / 2 + 200, 'RÉESSAYER ↻', 0xe67e22, () => this.scene.restart());
+        
+        // CORRECTION ICI : Fermeture correcte du bouton "Suivant"
+        this.nextBtn = this.createEndBtn(centerX, height / 2 + 200, 'SUIVANT ➔', 0xf1c40f, () => {
             const nIdx = levelsData.findIndex(l => l.id === currentLevel.id) + 1;
             this.scene.start('GameScene', { level: levelsData[nIdx] || levelsData[0] });
-        });
+        }); 
 
-        this.menuBtn = this.add.container(540, 1250).setVisible(false).setDepth(100);
-        this.menuBtn.add([this.add.graphics().fillStyle(0x2ecc71).fillRoundedRect(-250, -60, 500, 120, 30), this.add.text(0, 0, 'RETOUR À LA CARTE', { fontFamily: 'Arial Black', fontSize: '36px', fill: '#fff' }).setOrigin(0.5)]);
-        this.menuBtn.setInteractive(new Phaser.Geom.Rectangle(-250, -60, 500, 120), Phaser.Geom.Rectangle.Contains).on('pointerdown', () => this.scene.start('MenuScene'));
-        this.statusText = this.add.text(540, 850, '', { fontFamily: 'Arial Black', fontSize: '110px', fill: '#f1c40f', stroke: '#000', strokeThickness: 15 }).setOrigin(0.5).setDepth(110);
+        // CRÉATION SÉPARÉE : Le bouton Menu est maintenant indépendant
+        this.menuBtn = this.createEndBtn(centerX, height / 2 + 380, 'MENU PRINCIPAL', 0x2ecc71, () => {
+            this.scene.start('MenuScene');
+        });
+    }
+
+    createEndBtn(x, y, label, color, cb) {
+        let b = this.add.container(x, y).setVisible(false).setDepth(100);
+        b.add([this.add.graphics().fillStyle(color).fillRoundedRect(-250, -80, 500, 160, 40), this.add.text(0, 0, label, { fontFamily: 'Arial Black', fontSize: '50px', fill: '#fff' }).setOrigin(0.5)]);
+        b.setInteractive(new Phaser.Geom.Rectangle(-250, -80, 500, 160), Phaser.Geom.Rectangle.Contains).on('pointerdown', cb);
+        return b;
     }
 
     handleSwipe(dx, dy) {
@@ -148,17 +222,19 @@ class GameScene extends Phaser.Scene {
         this.canMove = false; this.saveState();
         let b1 = this.grid[r1][c1], b2 = this.grid[r2][c2];
         currentLevel.moves--; this.updateUI();
+        
         this.grid[r1][c1] = b2; this.grid[r2][c2] = b1;
         b1.sprite.gridRow = r2; b1.sprite.gridCol = c2;
         b2.sprite.gridRow = r1; b2.sprite.gridCol = c1;
+
         const getX = (c) => this.OFFSET_X + (c * this.TILE_SIZE) + (this.TILE_SIZE / 2);
         const getY = (r) => this.OFFSET_Y + (r * this.TILE_SIZE) + (this.TILE_SIZE / 2);
+
         this.tweens.add({ targets: b1.sprite, x: getX(c2), y: getY(r2), duration: 250 });
         this.tweens.add({ targets: b2.sprite, x: getX(c1), y: getY(r1), duration: 250, onComplete: () => {
             if (b1.typePowerUp === 'star' || b2.typePowerUp === 'star') {
                 let targetCol = (b1.typePowerUp === 'star') ? b2.type : b1.type;
-                let starPos = (b1.typePowerUp === 'star') ? {r:r2, c:c2} : {r:r1, c:c1};
-                this.triggerPowerUp(starPos.r, starPos.c, targetCol); 
+                this.triggerPowerUp((b1.typePowerUp === 'star' ? r2 : r1), (b1.typePowerUp === 'star' ? c2 : c1), targetCol);
                 this.time.delayedCall(500, () => this.applyGravity());
                 return;
             }
@@ -217,80 +293,51 @@ class GameScene extends Phaser.Scene {
     destroyMatches(clusters) {
         clusters.forEach(cl => {
             let spawnPos = cl.cells[0];
-            if (cl.powerUp) {
-                cl.cells.forEach(p => {
-                    let cell = this.grid[p.r][p.c];
-                    if (p.r === spawnPos.r && p.c === spawnPos.c) {
-                        cell.typePowerUp = cl.powerUp; cell.type = -1;
-                        let oldX = cell.sprite.x, oldY = cell.sprite.y; cell.sprite.destroy();
-                        let key = cl.powerUp.includes('rocket') ? 'rocket' : cl.powerUp;
-                        cell.sprite = this.add.image(oldX, oldY, key).setDisplaySize(130, 130).setInteractive().setDepth(1);
-                        if (cl.powerUp === 'rocket_h') cell.sprite.setAngle(90);
-                        cell.sprite.gridRow = p.r; cell.sprite.gridCol = p.c;
-                        cell.sprite.on('pointerdown', () => { if(this.canMove) { this.selectedRow = cell.sprite.gridRow; this.selectedCol = cell.sprite.gridCol; }});
-                    } else this.destroyCell(p.r, p.c, 0, false);
-                });
-            } else cl.cells.forEach(p => this.destroyCell(p.r, p.c, 0, false));
+            cl.cells.forEach(p => {
+                let cell = this.grid[p.r][p.c];
+                if (cl.powerUp && p.r === spawnPos.r && p.c === spawnPos.c) {
+                    cell.typePowerUp = cl.powerUp; cell.type = -1;
+                    let oldX = cell.sprite.x, oldY = cell.sprite.y; cell.sprite.destroy();
+                    let key = cl.powerUp.includes('rocket') ? 'rocket' : cl.powerUp;
+                    cell.sprite = this.add.image(oldX, oldY, key).setDisplaySize(130, 130).setDepth(1);
+                    if (cl.powerUp === 'rocket_h') cell.sprite.setAngle(90);
+                    cell.sprite.gridRow = p.r; cell.sprite.gridCol = p.c;
+                } else this.destroyCell(p.r, p.c, 0, false);
+            });
         });
         this.time.delayedCall(400, () => this.applyGravity());
     }
 
     destroyCell(r, c, delay = 0, isPowerUp = false) {
-        if (r < 0 || r >= this.ROWS || c < 0 || c >= this.COLS) return;
-        let cell = this.grid[r][c]; if (!cell) return;
-
+        if (r < 0 || r >= this.ROWS || c < 0 || c >= this.COLS || !this.grid[r] || !this.grid[r][c]) return;
+        
+        let cell = this.grid[r][c];
         if (cell.shield) {
-            if (isPowerUp) {
-                cell.shield = false;
-                this.tweens.add({ targets: cell.shieldSprite, alpha: 0, scale: 1.8, duration: 400, onComplete: () => cell.shieldSprite.destroy() });
-                this.cameras.main.shake(150, 0.01);
-            }
+            if (isPowerUp) { cell.shield = false; this.tweens.add({ targets: cell.shieldSprite, alpha: 0, scale: 2, duration: 400, onComplete: () => cell.shieldSprite.destroy() }); }
             return;
         }
-
-        // Effet de vol si couleur cible
-        if (cell.type === currentLevel.targetColor) {
-            this.collectEffect(cell.sprite.x, cell.sprite.y, cell.type);
-        }
-
-        if (cell.typePowerUp) {
-            this.triggerPowerUp(r, c); // Déclenchement immédiat
-        } else {
-            this.grid[r][c] = null;
-            this.tweens.add({ targets: cell.sprite, alpha: 0, scale: 0, duration: 300, delay: delay, onComplete: () => cell.sprite.destroy() });
-        }
+        if (cell.type === currentLevel.targetColor) this.collectEffect(cell.sprite.x, cell.sprite.y, cell.type);
+        if (cell.typePowerUp) this.triggerPowerUp(r, c);
+        else { this.grid[r][c] = null; this.tweens.add({ targets: cell.sprite, alpha: 0, scale: 0, duration: 300, delay, onComplete: () => cell.sprite.destroy() }); }
     }
 
     collectEffect(startX, startY, type) {
         let ghost = this.add.image(startX, startY, 'ship' + type).setDisplaySize(130, 130).setDepth(20);
-        this.tweens.add({ targets: ghost, x: 830, y: 230, scale: 0.4, duration: 600, ease: 'Back.easeIn', onComplete: () => { ghost.destroy(); currentLevel.currentAmount++; this.updateUI(); this.tweens.add({ targets: this.targetText, scale: 1.3, duration: 100, yoyo: true }); } });
+        this.tweens.add({ targets: ghost, x: this.targetIcon.x, y: this.targetIcon.y, scale: 0.4, duration: 600, ease: 'Back.easeIn', onComplete: () => { ghost.destroy(); currentLevel.currentAmount++; this.updateUI(); } });
     }
 
     triggerPowerUp(r, c, colorTarget = null) {
-        let cell = this.grid[r][c]; 
-        if (!cell || !cell.typePowerUp) return;
+        if (r < 0 || r >= this.ROWS || c < 0 || c >= this.COLS || !this.grid[r] || !this.grid[r][c]) return;
         
-        let p = cell.typePowerUp;
-        let sprite = cell.sprite;
-        this.grid[r][c] = null; // Libère la case AVANT l'explosion pour éviter les boucles
-
+        let cell = this.grid[r][c]; 
+        if (!cell.typePowerUp) return;
+        
+        let p = cell.typePowerUp; let sprite = cell.sprite; this.grid[r][c] = null;
         this.tweens.add({ targets: sprite, scale: 2, alpha: 0, duration: 300, onComplete: () => sprite.destroy() });
         
-        if (p === 'bombe') {
-            for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) this.destroyCell(r + i, c + j, 100, true);
-        } else if (p.includes('rocket')) {
-            if (p === 'rocket_h') { // Détruit la ligne
-                for (let i = 0; i < this.COLS; i++) this.destroyCell(r, i, 60, true);
-            } else { // Détruit la colonne
-                for (let i = 0; i < this.ROWS; i++) this.destroyCell(i, c, 60, true);
-            }
-        } else if (p === 'star') {
-            let tc = (colorTarget !== null) ? colorTarget : Phaser.Math.Between(0, 4);
-            this.cameras.main.shake(200, 0.01);
-            for(let rr=0; rr<this.ROWS; rr++) for(let cc=0; cc<this.COLS; cc++) {
-                if(this.grid[rr][cc]?.type === tc) this.destroyCell(rr, cc, Phaser.Math.Between(50, 400), true);
-            }
-        }
+        if (p === 'bombe') { for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) this.destroyCell(r + i, c + j, 100, true); }
+        else if (p.includes('rocket')) { if (p === 'rocket_h') { for (let i = 0; i < this.COLS; i++) this.destroyCell(r, i, 60, true); } else { for (let i = 0; i < this.ROWS; i++) this.destroyCell(i, c, 60, true); } }
+        else if (p === 'star') { let tc = (colorTarget !== null) ? colorTarget : Phaser.Math.Between(0, 4); for(let rr=0; rr<this.ROWS; rr++) for(let cc=0; cc<this.COLS; cc++) if(this.grid[rr][cc]?.type === tc) this.destroyCell(rr, cc, Phaser.Math.Between(50, 400), true); }
     }
 
     applyGravity() {
@@ -314,11 +361,10 @@ class GameScene extends Phaser.Scene {
             for (let r = 0; r < this.ROWS; r++) {
                 if (this.grid[r][c] === null) {
                     let t = Phaser.Math.Between(0, 4);
-                    let s = this.add.image(this.OFFSET_X + (c * this.TILE_SIZE) + (this.TILE_SIZE/2), this.OFFSET_Y - 200, 'ship'+t).setDisplaySize(130, 130).setInteractive();
+                    let s = this.add.image(this.OFFSET_X + (c * this.TILE_SIZE) + (this.TILE_SIZE/2), this.OFFSET_Y - 200, 'ship'+t).setDisplaySize(130, 130).setDepth(1);
                     s.gridRow = r; s.gridCol = c;
-                    this.grid[r][c] = { type: t, sprite: s, typePowerUp: null, shield: false, shieldSprite: null };
+                    this.grid[r][c] = { type: t, sprite: s, typePowerUp: null, shield: false };
                     this.tweens.add({ targets: s, y: this.OFFSET_Y + (r * this.TILE_SIZE) + (this.TILE_SIZE/2), duration: 500 });
-                    s.on('pointerdown', () => { if (this.canMove) { this.selectedRow = s.gridRow; this.selectedCol = s.gridCol; }});
                 }
             }
         }
@@ -326,14 +372,7 @@ class GameScene extends Phaser.Scene {
     }
 
     saveState() {
-        let state = [];
-        for (let r = 0; r < this.ROWS; r++) {
-            state[r] = [];
-            for (let c = 0; c < this.COLS; c++) {
-                let cell = this.grid[r][c];
-                state[r][c] = cell ? { type: cell.type, typePowerUp: cell.typePowerUp, shield: cell.shield } : null;
-            }
-        }
+        let state = this.grid.map(row => row.map(cell => cell ? { type: cell.type, typePowerUp: cell.typePowerUp, shield: cell.shield } : null));
         this.history.push({ grid: state, moves: currentLevel.moves, amount: currentLevel.currentAmount });
         if (this.history.length > 3) this.history.shift();
     }
@@ -341,23 +380,20 @@ class GameScene extends Phaser.Scene {
     undoMove() {
         if (this.undoLeft <= 0 || this.history.length === 0 || !this.canMove) return;
         this.undoLeft--; this.undoText.setText(`↩ ANNULER (${this.undoLeft}/3)`);
-        let last = this.history.pop();
-        currentLevel.moves = last.moves; currentLevel.currentAmount = last.amount;
+        let last = this.history.pop(); currentLevel.moves = last.moves; currentLevel.currentAmount = last.amount;
         this.updateUI();
+        this.grid.forEach(row => row.forEach(c => { if(c){ if(c.sprite) c.sprite.destroy(); if(c.shieldSprite) c.shieldSprite.destroy(); }}));
         for (let r = 0; r < this.ROWS; r++) {
             for (let c = 0; c < this.COLS; c++) {
-                if (this.grid[r][c]) { if (this.grid[r][c].sprite) this.grid[r][c].sprite.destroy(); if (this.grid[r][c].shieldSprite) this.grid[r][c].shieldSprite.destroy(); }
                 let sD = last.grid[r][c];
                 if (sD) {
-                    let x = this.OFFSET_X + (c * this.TILE_SIZE) + (this.TILE_SIZE / 2);
-                    let y = this.OFFSET_Y + (r * this.TILE_SIZE) + (this.TILE_SIZE / 2);
+                    let x = this.OFFSET_X + (c * this.TILE_SIZE) + (this.TILE_SIZE/2), y = this.OFFSET_Y + (r * this.TILE_SIZE) + (this.TILE_SIZE/2);
                     let key = sD.typePowerUp ? (sD.typePowerUp.includes('rocket') ? 'rocket' : sD.typePowerUp) : 'ship' + sD.type;
-                    let s = this.add.image(x, y, key).setDisplaySize(130, 130).setInteractive();
+                    let s = this.add.image(x, y, key).setDisplaySize(130, 130).setDepth(1);
                     if (sD.typePowerUp === 'rocket_h') s.setAngle(90);
                     s.gridRow = r; s.gridCol = c;
-                    this.grid[r][c] = { type: sD.type, sprite: s, typePowerUp: sD.typePowerUp, shield: sD.shield, shieldSprite: null };
+                    this.grid[r][c] = { type: sD.type, sprite: s, typePowerUp: sD.typePowerUp, shield: sD.shield };
                     if (sD.shield) this.grid[r][c].shieldSprite = this.add.image(x, y, 'bouclier').setDisplaySize(160, 160).setAlpha(0.8).setDepth(2);
-                    s.on('pointerdown', () => { if(this.canMove) { this.selectedRow = s.gridRow; this.selectedCol = s.gridCol; }});
                 } else this.grid[r][c] = null;
             }
         }
@@ -366,17 +402,37 @@ class GameScene extends Phaser.Scene {
     updateUI() {
         this.movesText.setText(`COUPS\n${currentLevel.moves}`);
         this.targetText.setText(`OBJ.\n${currentLevel.currentAmount}/${currentLevel.targetAmount}`);
-        if (currentLevel.currentAmount >= currentLevel.targetAmount) { this.statusText.setText("MISSION RÉUSSIE !").setFill('#2ecc71'); this.nextBtn.setVisible(true); this.menuBtn.setVisible(true); this.canMove = false; localStorage.setItem(SAVE_KEY, Number(currentLevel.id) + 1); }
-        else if (currentLevel.moves <= 0) { this.statusText.setText("ÉCHEC").setFill('#e74c3c'); this.retryBtn.setVisible(true); this.menuBtn.setVisible(true); this.canMove = false; }
+        
+        if (currentLevel.currentAmount >= currentLevel.targetAmount) { 
+            // VICTOIRE
+            this.statusText.setText("GAGNÉ !").setVisible(true).setFill('#2ecc71'); 
+            this.nextBtn.setVisible(true); 
+            this.menuBtn.setVisible(true); // 🟢 Bouton Menu affiché
+            this.canMove = false; 
+            localStorage.setItem(SAVE_KEY, Number(currentLevel.id) + 1); 
+            
+        } else if (currentLevel.moves <= 0) { 
+            // DÉFAITE
+            this.statusText.setText("ÉCHEC").setVisible(true).setFill('#e74c3c'); 
+            this.retryBtn.setVisible(true); 
+            this.menuBtn.setVisible(true); // 🟢 Bouton Menu affiché
+            this.canMove = false; 
+        }
     }
 }
 
 /**
- * CONFIGURATION
+ * CONFIGURATION FINALE 
  */
+const VIRTUAL_WIDTH = 1080;
+const VIRTUAL_HEIGHT = VIRTUAL_WIDTH * (window.innerHeight / window.innerWidth);
+
 const config = {
-    type: Phaser.AUTO, width: 1080, height: 1920, backgroundColor: '#000',
-    scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
+    type: Phaser.AUTO,
+    width: VIRTUAL_WIDTH,
+    height: VIRTUAL_HEIGHT,
+    backgroundColor: '#000000',
+    scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH, parent: 'game-container' },
     scene: [MenuScene, GameScene]
 };
 const game = new Phaser.Game(config);
