@@ -6,11 +6,15 @@
     <title>Puzzle Tactical - Match 3</title>
     <style>
         body { margin: 0; background: #222; display: flex; justify-content: center; align-items: center; height: 100vh; overflow: hidden; }
-        canvas { box-shadow: 0 0 20px rgba(0,0,0,0.5); }
+        canvas { box-shadow: 0 0 20px rgba(0,0,0,0.5); image-rendering: -webkit-optimize-contrast; /* Pour Chrome/Android */
+    image-rendering: crisp-edges;               /* Pour Firefox */
+    image-rendering: pixelated;                 /* Alternative si besoin */
+    -ms-interpolation-mode: nearest-neighbor;   /* Pour IE/Edge */ }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
 </head>
 <body>
+    <script src="level.js"></script>
     <script src="game.js"></script>
 </body>
 </html>
